@@ -1,0 +1,68 @@
+const fs = require('fs')
+const path = require('path')
+const tinify = require('tinify')
+const minimist = require('minimist')
+const func = require('./func')
+
+// Tinify API key
+tinify.key = 'vnJR7z8v3q5XkMld0dQZLLfgQXw8jk61'
+
+// Directory path
+let userDirPath = minimist(process.argv.slice(2))
+let dirPath = userDirPath.d.replace('\\', '\\\\') + '\\\\' // Edit path on windows
+
+// Get all file with extension .jpg|.jpeg|.png
+const files = [];
+fs.readdir(dirPath, { withFileTypes: true }, (err, fileArr) => {
+	fileArr.forEach(file => {
+		if (file.isFile() && func.isImage(file.name)) {
+			files.push(file.name)
+		}
+	})
+	console.log(`Found ${files.length} files. Prepare to compress file...`)
+})
+
+// Validation of API key
+tinify.validate(err => {
+	if (err) {
+		console.log('There was a problem with your API key or with your API account.')
+	}
+	else {
+		let totalSuccess = 0
+		let fileLength = files.length
+		let accessTime = new Date().getTime()
+
+		files.forEach((file, index) => {
+			// File path
+			let filePath = dirPath + file
+
+			// Get file size before compress
+			let oldSize = Math.round(fs.statSync(filePath).size / 1024 * 100) / 100
+
+			// Compress image
+			tinify.fromFile(filePath).toFile(filePath, (err) => {
+				if (err) {
+					console.log(err.message)
+				}
+				else {
+					// Get file size after compress
+					let newSize = Math.round(fs.statSync(filePath).size / 1024 * 100) / 100
+
+					totalSuccess++
+
+					let modifiedTime = accessTime + index * 5000
+
+					fs.utimes(filePath, new Date(accessTime), new Date(modifiedTime), (err) => {
+						if (err) {
+							console.log(err.message)
+						}
+						else {
+							// Show result
+							console.log(`[${totalSuccess.toString()}/${fileLength.toString()}] ${path.basename(filePath)} ${oldSize}KB => ${newSize}KB (-${Math.round((oldSize - newSize) * 100 / oldSize).toString().padStart(2, '0')}%)\n`)
+						}
+					})
+				}
+			})
+		})
+	}
+})
